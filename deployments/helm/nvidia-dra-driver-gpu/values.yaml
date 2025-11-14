@@ -56,6 +56,16 @@ serviceAccount:
 resources:
   gpus:
     enabled: true
+    # Maximum number of pod allocations allowed per GPU
+    # Default: 1 (no sharing, traditional behavior)
+    # Override examples:
+    #   helm install ... --set resources.gpus.allocationLimits.default=4
+    #   helm install ... --set resources.gpus.allocationLimits."NVIDIA GeForce RTX 3090"=8
+    allocationLimits:
+      default: 1
+      # Uncomment to set limits for specific GPU models:
+      # "NVIDIA GeForce RTX 3090": 4
+      # "NVIDIA GeForce RTX 3060": 2
   computeDomains:
     enabled: true
 

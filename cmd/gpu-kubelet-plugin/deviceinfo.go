@@ -18,15 +18,65 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/Masterminds/semver"
 	nvdev "github.com/NVIDIA/go-nvlib/pkg/nvlib/device"
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
+	"gopkg.in/yaml.v3"
 	resourceapi "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/dynamic-resource-allocation/deviceattribute"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 )
+
+type AllocationLimit struct {
+	ProductName    string `yaml:"productName"`
+	MaxAllocations int    `yaml:"maxAllocations"`
+}
+
+var allocationLimitsMap map[string]int
+
+func init() {
+	allocationLimitsMap = loadAllocationLimits()
+}
+
+func loadAllocationLimits() map[string]int {
+	limitsMap := make(map[string]int)
+
+	configPath := "/etc/nvidia-dra-driver-gpu/allocation-limits/limits.yaml"
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		klog.Warningf("Failed to read allocation limits config: %v, using default (1)", err)
+		limitsMap["default"] = 1
+		return limitsMap
+	}
+
+	var limits []AllocationLimit
+	if err := yaml.Unmarshal(data, &limits); err != nil {
+		klog.Warningf("Failed to parse allocation limits config: %v, using default (1)", err)
+		limitsMap["default"] = 1
+		return limitsMap
+	}
+
+	for _, limit := range limits {
+		limitsMap[limit.ProductName] = limit.MaxAllocations
+	}
+
+	klog.Infof("Loaded GPU allocation limits: %v", limitsMap)
+	return limitsMap
+}
+
+func getMaxAllocations(productName string) int {
+	if val, ok := allocationLimitsMap[productName]; ok {
+		return val
+	}
+	if val, ok := allocationLimitsMap["default"]; ok {
+		return val
+	}
+	return 1 // フォールバック
+}
 
 type GpuInfo struct {
 	UUID                  string `json:"uuid"`
@@ -98,6 +148,8 @@ func (d *VfioDeviceInfo) CanonicalName() string {
 }
 
 func (d *GpuInfo) GetDevice() resourceapi.Device {
+	maxAllocations := getMaxAllocations(d.productName)
+
 	device := resourceapi.Device{
 		Name: d.CanonicalName(),
 		Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
@@ -133,11 +185,21 @@ func (d *GpuInfo) GetDevice() resourceapi.Device {
 			"memory": {
 				Value: *resource.NewQuantity(int64(d.memoryBytes), resource.BinarySI),
 			},
+			"allocations": {
+				Value: *resource.NewQuantity(int64(maxAllocations), resource.DecimalSI),
+				RequestPolicy: &resourceapi.CapacityRequestPolicy{
+					Default: resource.NewQuantity(1, resource.DecimalSI),
+				},
+			},
 		},
 	}
 	if d.pcieRootAttr != nil {
 		device.Attributes[d.pcieRootAttr.Name] = d.pcieRootAttr.Value
 	}
+
+	// Enable multiple allocations per GPU
+	device.AllowMultipleAllocations = ptr.To(true)
+
 	return device
 }
 

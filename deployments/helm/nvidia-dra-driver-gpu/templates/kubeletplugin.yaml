@@ -265,6 +265,11 @@ spec:
         - name: driver-root
           mountPath: /driver-root
           mountPropagation: HostToContainer
+        {{- if .Values.resources.gpus.enabled }}
+        - name: gpu-allocation-limits
+          mountPath: /etc/nvidia-dra-driver-gpu/allocation-limits
+          readOnly: true
+        {{- end }}
         {{- if and .Values.featureGates (and (hasKey .Values.featureGates "PassthroughSupport") .Values.featureGates.PassthroughSupport) }}
         - name: host-root
           mountPath: /host-root
@@ -304,6 +309,11 @@ spec:
         hostPath:
           path: {{ .Values.nvidiaDriverRoot }}
           type: DirectoryOrCreate
+      {{- if .Values.resources.gpus.enabled }}
+      - name: gpu-allocation-limits
+        configMap:
+          name: {{ include "nvidia-dra-driver-gpu.fullname" . }}-gpu-allocation-limits
+      {{- end }}
       {{- if and .Values.featureGates (and (hasKey .Values.featureGates "PassthroughSupport") .Values.featureGates.PassthroughSupport) }}
       - name: host-root
         hostPath:
