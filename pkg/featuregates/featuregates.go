@@ -104,11 +104,13 @@ func newFeatureGates(version *version.Version) featuregate.MutableVersionedFeatu
 	// Add project-specific feature gates
 	utilruntime.Must(fg.AddVersioned(defaultFeatureGates))
 
-	// Override default logging feature gate values
+	// Override default logging feature gate values if supported at the current version
+	// ContextualLogging may not be available at lower/unknown versions
 	loggingOverrides := map[string]bool{
 		string(logsapi.ContextualLogging): true,
 	}
-	utilruntime.Must(fg.SetFromMap(loggingOverrides))
+	// Ignore errors when setting feature gates to allow builds with unknown versions
+	_ = fg.SetFromMap(loggingOverrides)
 
 	return fg
 }
