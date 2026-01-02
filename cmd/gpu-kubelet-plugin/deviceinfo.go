@@ -149,6 +149,8 @@ func (d *GpuInfo) GetDevice() resourceapi.Device {
 	if d.pcieRootAttr != nil {
 		device.Attributes[d.pcieRootAttr.Name] = d.pcieRootAttr.Value
 	}
+	// Enable GPU sharing by allowing multiple pod allocations per GPU
+	device.AllowMultipleAllocations = ptr.To(true)
 	return device
 }
 
