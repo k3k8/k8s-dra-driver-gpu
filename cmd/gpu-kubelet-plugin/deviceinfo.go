@@ -143,6 +143,10 @@ func (d *GpuInfo) GetDevice() resourceapi.Device {
 		Capacity: map[resourceapi.QualifiedName]resourceapi.DeviceCapacity{
 			"memory": {
 				Value: *resource.NewQuantity(int64(d.memoryBytes), resource.BinarySI),
+				RequestPolicy: &resourceapi.CapacityRequestPolicy{
+					// Default to full GPU memory (exclusive allocation)
+					Default: resource.NewQuantity(int64(d.memoryBytes), resource.BinarySI),
+				},
 			},
 		},
 	}
